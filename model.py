@@ -55,19 +55,6 @@ def lr_schedule(epoch):
     return  lr
 
 
-# model
-def create_model(base_model):
-    model = Sequential([
-        base_model,
-        GlobalAveragePooling2D(),
-        Dense(128, activation='relu'),
-        Dense(64, activation='relu'),
-        Dense(2)  # Assuming two outputs: angle and speed
-    ])
-    model.compile(optimizer = Adam(learning_rate = lr_schedule(0)), loss = 'mse', metrics=['accuracy'])
-    return model
-
-
 def plot_training_history(history, model):
     acc = history.history['accuracy']
     val_acc = history.history['val_accuracy']
@@ -103,32 +90,31 @@ class TrainingMonitor(Callback):
         print(f"Training loss: {logs.get('loss')}, Training accuracy: {logs.get('accuracy')}")
         print(f"Validation loss: {logs.get('val_loss')}, Validation accuracy: {logs.get('val_accuracy')}")
 
-
-def train_evaluate_model(df_train, df_val, image_file, base_model, target_size=(128,128), batch_size=32, epochs=30):
-    model = create_model(base_model)
+def setup_callbacks():
     lr_scheduler = LearningRateScheduler(lr_schedule)
+    early_stopper = EarlyStopping(monitor='val_loss', min_delta=0.001, patience=5, verbose=1, mode='min', restore_best_weights=True)
     monitor = TrainingMonitor()
+    return [lr_scheduler, early_stopper, monitor]
+
+def train_evaluate_model(df_train, df_val, image_file, model, target_size=(128,128), batch_size=32, epochs=30):
+    callbacks = setup_callbacks()
+    steps_per_epoch = (len(df_train) // batch_size)
+    validation_steps = int(np.ceil(len(df_val) / batch_size))
 
     train_generator = create_train_generator(df_train, image_file, target_size=target_size, batch_size=batch_size)
     val_generator = create_validation_generator(df_val, image_file, target_size=target_size, batch_size=batch_size)
 
-    early_stopper = EarlyStopping(
-        monitor='val_loss',
-        min_delta=0.001,
-        patience=5,
-        verbose=1,
-        mode='min',
-        restore_best_weights=True
-    )
     history = model.fit(
         train_generator,
-        steps_per_epoch = (len(df_train) // batch_size),
+        steps_per_epoch = steps_per_epoch,
         validation_data = val_generator,
-        # validation_steps = len(df_val) / batch_size,
+        validation_steps = validation_steps,
+        workers=10,             # 并行工作进程数
+        use_multiprocessing = True,
         epochs = epochs,
-        callbacks = [lr_scheduler, monitor, early_stopper]
+        callbacks = callbacks
     )
-    
+
     loss, accuracy = model.evaluate(val_generator)
     print(f"Evaluation results -- Loss: {loss}, Accuracy: {accuracy}")
 
@@ -136,7 +122,7 @@ def train_evaluate_model(df_train, df_val, image_file, base_model, target_size=(
 
 
 
-def perform_kfold_cross_validation(full_df, image_file, base_model, k=5, target_size=(128,128), batch_size=32, epochs=30):
+def perform_kfold_cross_validation(full_df, image_file, base_model, model_name, k=5, target_size=(128,128), batch_size=32, epochs=30):
     # Initialize k-fold cross-validation
     kfold = KFold(n_splits=k, shuffle=True, random_state=42)
     fold_results = []
@@ -144,11 +130,11 @@ def perform_kfold_cross_validation(full_df, image_file, base_model, k=5, target_
     best_model = None
     best_fold = None
 
-    print("Starting training process...")
+    print("5Starting training process...")
 
     for fold, (train_idx, val_idx) in enumerate(kfold.split(full_df), start=1):
-        print(f"Fold {fold}/{k}:")
-        print(f'Number of training samples: {len(train_idx)}, Number of validation samples: {len(val_idx)}')
+        print(f"6Fold {fold}/{k}:")
+        print(f'7Number of training samples: {len(train_idx)}, Number of validation samples: {len(val_idx)}')
 
         # Split the data into training and validation
         df_train = full_df.iloc[train_idx]
@@ -176,7 +162,7 @@ def perform_kfold_cross_validation(full_df, image_file, base_model, k=5, target_
 
     # Save the best model
     if best_model is not None:
-        model_path = os.path.join(os.getcwd(), f'{best_model.input_names[0]}_model.h5')
+        model_path = os.path.join(os.getcwd(), f'{model_name}_model')
         # Check if the file exists and remove it if it does
         if os.path.exists(model_path):
             os.remove(model_path)
@@ -188,36 +174,55 @@ def perform_kfold_cross_validation(full_df, image_file, base_model, k=5, target_
     return fold_results
 
 
+def create_model(base_model):
+    for layer in base_model.layers:
+        layer.trainable = False
+
+    model = Sequential([
+        base_model,
+        GlobalAveragePooling2D(),
+        Dense(128, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(2)  # Assuming two outputs: angle and speed
+    ])
+    
+    model.compile(optimizer = Adam(learning_rate = lr_schedule(0)), loss = 'mse', metrics=['accuracy'])
+    return model
+
+
 def train_multiple_models(full_df, image_file, base_models, k=5, target_size=(128,128), batch_size=32, epochs=30):
     # Returns: A dictionary with models' names as keys and their performance metrics as values.
     results = {}
+    
+    for base_model in base_models:
+        base_model = base_model()
+        model = create_model(base_model)
+        model_name = base_model.name
+        print(f"Training model: {model_name}")
 
-    for model_creator in base_models:
-        model = model_creator()
-        print(f"Training model: {model.name}")
+        result = perform_kfold_cross_validation(full_df, image_file, model, model_name, k = k, target_size = target_size, batch_size = batch_size, epochs = epochs)
 
-        result = perform_kfold_cross_validation(full_df, image_file, model, k = k, target_size = target_size, batch_size = batch_size, epochs = epochs)
-
-        results[model.name] = result
+        results[model_name] = result
 
     return results
 
 
 
 def main():
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
     csv_file = 'training_norm.csv'
     image_file = 'training_data'
     k = 5
     target_size = (128,128)
-    batch_size = 32
+    batch_size = 64
     epochs = 15
 
     full_df = load_data(csv_file)
 
     base_models = [
+        lambda: VGG19(weights='imagenet', include_top=False, input_shape=(128, 128, 3)),
         lambda: ResNet50(weights='imagenet', include_top=False, input_shape=(128, 128, 3)),
         lambda: DenseNet121(weights='imagenet', include_top=False, input_shape=(128, 128, 3)),
-        lambda: VGG19(weights='imagenet', include_top=False, input_shape=(128, 128, 3))
     ]
     
     results = train_multiple_models(full_df, image_file, base_models, k=k, target_size=target_size, batch_size=batch_size, epochs=epochs)
