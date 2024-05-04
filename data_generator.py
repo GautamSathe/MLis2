@@ -48,7 +48,7 @@ def create_train_generator(dataframe, image_directory, target_size=(128, 128), b
         class_mode = 'raw',  # 因为这是一个回归问题，不是分类问题
         target_size = target_size,  # 假设我们希望所有图像都调整为320x240
         batch_size = batch_size,
-        subset='training'
+        # subset='training'
     )
 
     return train_generator
@@ -63,7 +63,7 @@ def create_validation_generator(dataframe, image_directory, target_size=(128, 12
         class_mode = 'raw',
         target_size = target_size,
         batch_size = batch_size,
-        subset = 'validation' #Specify that this is verification data
+        # subset = 'validation' #Specify that this is verification data
     )
 
     return validation_generator

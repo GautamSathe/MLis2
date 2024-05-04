@@ -8,9 +8,8 @@ from keras.layers import Dense, GlobalAveragePooling2D
 from keras.optimizers import Adam
 from keras.callbacks import LearningRateScheduler
 from keras.applications import VGG19, DenseNet121, ResNet50
-from keras.callbacks import Callback
+from keras.callbacks import Callback, EarlyStopping
 from data_generator import create_train_generator, create_validation_generator
-
 
 
 def load_data(csv_path):
@@ -65,7 +64,7 @@ def create_model(base_model):
         Dense(64, activation='relu'),
         Dense(2)  # Assuming two outputs: angle and speed
     ])
-    model.compile(optimizer = Adam(learing_rate = lr_schedule(0), loss = 'mse'))
+    model.compile(optimizer = Adam(learning_rate = lr_schedule(0)), loss = 'mse', metrics=['accuracy'])
     return model
 
 
@@ -80,7 +79,7 @@ def plot_training_history(history, model):
     plt.subplot(1, 2, 1)
     plt.plot(epochs_range, acc, label='Training Accuracy')
     plt.plot(epochs_range, val_acc, label='Validation Accuracy')
-    plt.title(f'{model.name} Training and Validation Accuracy')
+    plt.title(f'{model.input_names[0]} Training and Validation Accuracy')
     plt.legend(loc='lower right')
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
@@ -88,13 +87,13 @@ def plot_training_history(history, model):
     plt.subplot(1, 2, 2)
     plt.plot(epochs_range, loss, label='Training Loss')
     plt.plot(epochs_range, val_loss, label='Validation Loss')
-    plt.title('f{model.name} Training and Validation Loss')
+    plt.title(f'{model.input_names[0]} Training and Validation Loss')
     plt.legend(loc='upper right')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
 
     plt.tight_layout()  # Adjust layout to prevent overlap
-    plt.savefig(f'{model.name}_loss_accuracy_curves.png')  # Save the loss plot as an image file
+    plt.savefig(f'{model.input_names[0]}_loss_accuracy_curves.png')  # Save the loss plot as an image file
 
 
 class TrainingMonitor(Callback):
@@ -113,16 +112,24 @@ def train_evaluate_model(df_train, df_val, image_file, base_model, target_size=(
     train_generator = create_train_generator(df_train, image_file, target_size=target_size, batch_size=batch_size)
     val_generator = create_validation_generator(df_val, image_file, target_size=target_size, batch_size=batch_size)
 
+    early_stopper = EarlyStopping(
+        monitor='val_loss',
+        min_delta=0.001,
+        patience=5,
+        verbose=1,
+        mode='min',
+        restore_best_weights=True
+    )
     history = model.fit(
         train_generator,
-        steps_per_epoch=len(df_train) // batch_size,
+        steps_per_epoch = (len(df_train) // batch_size),
         validation_data = val_generator,
-        validation_steps=len(df_val) // batch_size,
+        # validation_steps = len(df_val) / batch_size,
         epochs = epochs,
-        callbacks = [lr_scheduler, monitor]
+        callbacks = [lr_scheduler, monitor, early_stopper]
     )
     
-    loss, accuracy = model.evaluate(val_generator, steps = len(df_val) // batch_size)
+    loss, accuracy = model.evaluate(val_generator)
     print(f"Evaluation results -- Loss: {loss}, Accuracy: {accuracy}")
 
     return history, loss, accuracy, model
@@ -132,43 +139,53 @@ def train_evaluate_model(df_train, df_val, image_file, base_model, target_size=(
 def perform_kfold_cross_validation(full_df, image_file, base_model, k=5, target_size=(128,128), batch_size=32, epochs=30):
     # Initialize k-fold cross-validation
     kfold = KFold(n_splits=k, shuffle=True, random_state=42)
-    fold_result = []
+    fold_results = []
     best_accuracy = 0
-    model = None
+    best_model = None
+    best_fold = None
 
-    print(f"Starting training process...")
+    print("Starting training process...")
 
-    #parameter 1 means counting start from 1
-    for fold,(train_idx, val_idx) in enumerate(kfold.split(full_df), 1):
-        print(f"Fold:{fold}/{k}")
+    for fold, (train_idx, val_idx) in enumerate(kfold.split(full_df), start=1):
+        print(f"Fold {fold}/{k}:")
+        print(f'Number of training samples: {len(train_idx)}, Number of validation samples: {len(val_idx)}')
 
+        # Split the data into training and validation
         df_train = full_df.iloc[train_idx]
         df_val = full_df.iloc[val_idx]
 
+        # Train and evaluate the model for the current fold
         history, loss, accuracy, model = train_evaluate_model(
-            df_train, df_val, image_file, base_model, 
+            df_train, df_val, image_file, base_model,
             target_size=target_size, batch_size=batch_size, epochs=epochs
         )
 
+        # Update the best model if the current fold's accuracy is higher
         if accuracy > best_accuracy:
             best_accuracy = accuracy
             best_model = model
+            best_fold = fold
+            print(f'Updated best model at fold {fold} with accuracy: {accuracy}')
 
-        fold_result.append({
+        fold_results.append({
             'fold': fold,
             'history': history,
             'loss': loss,
             'accuracy': accuracy
         })
 
-    #plot training process image of the best model 
-    plot_training_history(history, model)
+    # Save the best model
+    if best_model is not None:
+        model_path = os.path.join(os.getcwd(), f'{best_model.input_names[0]}_model.h5')
+        # Check if the file exists and remove it if it does
+        if os.path.exists(model_path):
+            os.remove(model_path)
+        best_model.save(model_path)
+        print(f"Training completed. Best model saved from fold {best_fold} with validation accuracy: {best_accuracy:.2f} at {model_path}")
+    else:
+        print("No model improvement observed across folds.")
 
-    best_model.save(f'best_{model.name}_model.h5')
-    print(f"Training completed.")
-    print(f"New best {model.name} model saved with validation accuracy: {accuracy}")
-
-    return fold_result
+    return fold_results
 
 
 def train_multiple_models(full_df, image_file, base_models, k=5, target_size=(128,128), batch_size=32, epochs=30):
@@ -193,7 +210,7 @@ def main():
     k = 5
     target_size = (128,128)
     batch_size = 32
-    epochs = 30
+    epochs = 15
 
     full_df = load_data(csv_file)
 
@@ -206,6 +223,7 @@ def main():
     results = train_multiple_models(full_df, image_file, base_models, k=k, target_size=target_size, batch_size=batch_size, epochs=epochs)
 
     print(results)
+
 
 if __name__ == '__main__':
     main()
