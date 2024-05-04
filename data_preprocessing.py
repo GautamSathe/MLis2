@@ -76,6 +76,15 @@ def add_extension(file_path):
     df.to_csv(file_path, index=False)
 
 
+def extract_first_100_rows(input_csv, output_csv):
+    df = pd.read_csv(input_csv, nrows=100)
+    
+    # 保存到新的CSV文件
+    df.to_csv(output_csv, index=False)  # index=False表示不保存行索引到文件
+
+    print(f"Data extracted and saved to {output_csv}")
+
+
 def main():
     image_files_path = 'training_data'
     file_path = 'training_norm.csv'
@@ -84,6 +93,7 @@ def main():
     # extract_data_from_filenames(image_files_path)
     # change_50(image_files_path)
     # add_extension(file_path)
+    extract_first_100_rows(file_path, '100_train_norm.csv')
 
 
 if __name__ == '__main__':
