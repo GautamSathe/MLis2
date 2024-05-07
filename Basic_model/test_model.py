@@ -1,7 +1,6 @@
 import numpy as np
-import os, re
+import re
 import pandas as pd
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from keras.models import load_model
 from keras.preprocessing.image import ImageDataGenerator, load_img
 

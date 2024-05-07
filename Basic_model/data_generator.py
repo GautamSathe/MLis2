@@ -69,6 +69,48 @@ def create_validation_generator(dataframe, image_directory, target_size=(128, 12
     return validation_generator
 
 
+def creat_train_generator_directory(train_dir, target_size = (128, 128), batch_size=32):
+    train_generator = datagen.flow_from_directory(
+        train_dir,
+        target_size=target_size,
+        batch_size=batch_size,
+        class_mode='raw',  # or 'categorical', depending on your case
+        subset='training'
+    )
+    return train_generator
+
+
+def creat_validation_generator_directory(train_dir, target_size = (128, 128), batch_size=32):
+    validation_generator = datagen.flow_from_directory(
+        train_dir,
+        target_size=target_size,
+        batch_size=batch_size,
+        class_mode='raw',  # or 'categorical', depending on your case
+        subset='validation'
+    )
+    return validation_generator
+
+
+def create_train_generator_flow(images, labels, batch_size=32):
+    datagen = datagen()
+    train_generator = datagen.flow(
+        images,
+        labels,
+        batch_size=batch_size
+    )
+    return train_generator
+
+
+def create_validation_generator_flow(images, labels, batch_size=32):
+    datagen = datagen()  # Usually, we don't apply augmentation to validation data
+    validation_generator = datagen.flow(
+        images,
+        labels,
+        batch_size=batch_size
+    )
+    return validation_generator
+
+
 class ImageLabelGenerator(Sequence):
     def __init__(self, image_paths, angles, speeds, batch_size):
         self.image_paths = image_paths

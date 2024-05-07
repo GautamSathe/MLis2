@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 
 
-
 def get_files_path(image_files_path):
     files_path_list = []
     filenames = sorted(os.listdir(image_files_path))
@@ -85,15 +84,26 @@ def extract_first_100_rows(input_csv, output_csv):
     print(f"Data extracted and saved to {output_csv}")
 
 
+
+def data_normalization(csv_file):
+    df = pd.read_csv(csv_file)
+
+    df['angle'] = (df['angle'] - 50) / 80
+    df['speed'] = df['speed'] / 35
+
+    df.to_csv('collect_data_norm.csv', index=False)
+
+
 def main():
     image_files_path = 'training_data'
-    file_path = 'training_norm.csv'
+    file_path = '/home/alyzf6/MLis2/training_data.csv'
     # get_files_path(image_files_path)
     # rename_image(image_files_path)
     # extract_data_from_filenames(image_files_path)
     # change_50(image_files_path)
     # add_extension(file_path)
-    extract_first_100_rows(file_path, '100_train_norm.csv')
+    # extract_first_100_rows(file_path, '100_train_norm.csv')
+    data_normalization(file_path)
 
 
 if __name__ == '__main__':

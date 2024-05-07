@@ -47,34 +47,6 @@ def lr_schedule(epoch):
     return  lr
 
 
-def plot_training_history(history, model):
-    acc = history.history['accuracy']
-    val_acc = history.history['val_accuracy']
-    loss = history.history['loss']
-    val_loss = history.history['val_loss']
-    epochs_range = range(1, len(acc) + 1)
-
-    plt.figure(figsize=(12, 6))
-    plt.subplot(1, 2, 1)
-    plt.plot(epochs_range, acc, label='Training Accuracy')
-    plt.plot(epochs_range, val_acc, label='Validation Accuracy')
-    plt.title(f'{model.input_names[0]} Training and Validation Accuracy')
-    plt.legend(loc='lower right')
-    plt.xlabel('Epoch')
-    plt.ylabel('Accuracy')
-
-    plt.subplot(1, 2, 2)
-    plt.plot(epochs_range, loss, label='Training Loss')
-    plt.plot(epochs_range, val_loss, label='Validation Loss')
-    plt.title(f'{model.input_names[0]} Training and Validation Loss')
-    plt.legend(loc='upper right')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-
-    plt.tight_layout()  # Adjust layout to prevent overlap
-    plt.savefig(f'{model.input_names[0]}_loss_accuracy_curves.png')  # Save the loss plot as an image file
-
-
 class TrainingMonitor(Callback):
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
@@ -82,11 +54,13 @@ class TrainingMonitor(Callback):
         print(f"Training loss: {logs.get('loss')}, Training accuracy: {logs.get('accuracy')}")
         print(f"Validation loss: {logs.get('val_loss')}, Validation accuracy: {logs.get('val_accuracy')}")
 
+
 def setup_callbacks():
     lr_scheduler = LearningRateScheduler(lr_schedule)
     early_stopper = EarlyStopping(monitor='val_loss', min_delta=0.001, patience=5, verbose=1, mode='min', restore_best_weights=True)
     monitor = TrainingMonitor()
     return [lr_scheduler, early_stopper, monitor]
+
 
 def train_evaluate_model(df_train, df_val, image_file, model, target_size=(128,128), batch_size=32, epochs=30):
     callbacks = setup_callbacks()
@@ -101,7 +75,7 @@ def train_evaluate_model(df_train, df_val, image_file, model, target_size=(128,1
         steps_per_epoch = steps_per_epoch,
         validation_data = val_generator,
         validation_steps = validation_steps,
-        workers=10,             # 并行工作进程数
+        workers=10,             # Number of parallel worker processes
         use_multiprocessing = True,
         epochs = epochs,
         callbacks = callbacks
@@ -122,11 +96,11 @@ def perform_kfold_cross_validation(full_df, image_file, base_model, model_name, 
     best_model = None
     best_fold = None
 
-    print("5Starting training process...")
+    print("Starting training process...")
 
     for fold, (train_idx, val_idx) in enumerate(kfold.split(full_df), start=1):
-        print(f"6Fold {fold}/{k}:")
-        print(f'7Number of training samples: {len(train_idx)}, Number of validation samples: {len(val_idx)}')
+        print(f"Fold {fold}/{k}:")
+        print(f'Number of training samples: {len(train_idx)}, Number of validation samples: {len(val_idx)}')
 
         # Split the data into training and validation
         df_train = full_df.iloc[train_idx]
@@ -202,8 +176,8 @@ def train_multiple_models(full_df, image_file, base_models, k=5, target_size=(12
 
 def main():
     # os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-    csv_file = 'training_norm.csv'
-    image_file = 'training_data'
+    csv_file = '/home/alyzf6/MLis2/training_norm.csv'
+    image_file = '/home/alyzf6/MLis2/Data/training_data'
     k = 5
     target_size = (128,128)
     batch_size = 32
@@ -212,9 +186,9 @@ def main():
     full_df = load_data(csv_file)
 
     base_models = [
-        lambda: VGG19(weights='imagenet', include_top=False, input_shape=(128, 128, 3))
-        # lambda: ResNet50(weights='imagenet', include_top=False, input_shape=(128, 128, 3)),
-        # lambda: DenseNet121(weights='imagenet', include_top=False, input_shape=(128, 128, 3)),
+        lambda: VGG19(weights='imagenet', include_top=False, input_shape=(128, 128, 3)),
+        lambda: ResNet50(weights='imagenet', include_top=False, input_shape=(128, 128, 3)),
+        lambda: DenseNet121(weights='imagenet', include_top=False, input_shape=(128, 128, 3))
     ]
     
     results = train_multiple_models(full_df, image_file, base_models, k=k, target_size=target_size, batch_size=batch_size, epochs=epochs)
