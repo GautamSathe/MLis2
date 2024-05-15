@@ -59,9 +59,9 @@ def trans_to_csv(results, save_path = 'predictions.csv'):
 
 
 def main():
-    test_images = 'test_data'
+    test_images = 'Data/test_data'
     target_size = (128, 128)
-    models_path = ['vgg19_model', 'densenet121_model', 'resnet50_model']
+    models_path = ['Retrain_model/densenet121_input_model']
     results = final_predict(models_path, test_images, target_size)
     trans_to_csv(results)
     
