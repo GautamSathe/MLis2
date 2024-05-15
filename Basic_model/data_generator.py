@@ -134,21 +134,22 @@ class ImageLabelGenerator(Sequence):
         return images, [np.array(batch_y_angle), np.array(batch_y_speed)]
 
 
-def test_image_data_generator(generator, images_num = 5):
+def test_image_data_generator(generator, images_num = 10):
 
     images, labels = next(generator)
 
     for i in range(images_num):
-        image_path = f'machine-learning-in-science-ii-2024/generator_test_images/image_{str(i+1)}.png'
+        image_path = f'Data/generate_new_images/image_{str(i+1)}.png'
         plt.imsave(image_path, images[i])
     
 
 def main():
-    data_path = '/Users/mrs.zhuang/MLis2/training_norm.csv'
-    image_directory = '/Users/mrs.zhuang/MLis2/training_data'
-    # df = load_data(data_path)
-    # df = data_normalization(df)
-    # train_generator, validation_generator = create_image_data_generator(df, image_directory)
+    data_path = 'Data/training_data_norm.csv'
+    image_directory = 'Data/training_data'
+    df = load_data(data_path)
+    df = data_normalization(df)
+    train_generator = create_train_generator(df, image_directory)
+    test_image_data_generator(train_generator)
     
 
 

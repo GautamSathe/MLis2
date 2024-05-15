@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
+import tensorflow as tf
 from sklearn.model_selection import KFold
 from keras.models import load_model
 from keras.optimizers import Adam
@@ -135,15 +136,23 @@ def train_models(full_df, image_file, model_paths, train_data_num, k, target_siz
 
     return results
 
+def trans_to_tlite(model_path):
+    converter = tf.lite.TFLiteConverter.from_saved_model(model_path)
+    # converter.optimizations = [tf.lite.Optimize.DEFAULT] 
+    tflite_model = converter.convert()
+
+    with open('model.tflite', 'wb') as f:
+        f.write(tflite_model)
+
 
 def main():
-    csv_file = '/home/alyzf6/MLis2/collect_data_norm.csv'
-    image_file = '/home/alyzf6/MLis2/Data/collect_data_1'
+    csv_file = 'new_images_norm.csv'
+    image_file = 'new_images'
     k = 5
     target_size = (128,128)
     batch_size = 32
     epochs = 15
-    train_data_num = 3000
+    train_data_num = 4000
 
     full_df = pd.read_csv(csv_file)
 
@@ -158,12 +167,18 @@ def main():
     print(results)
 
 def main1():
-    csv_file = '/home/alyzf6/MLis2/collect_data_norm.csv'
-    image_file = '/home/alyzf6/MLis2/Data/collect_data_1'
+    csv_file = 'new_images_norm.csv'
+    image_file = 'new_images'
     df = pd.read_csv(csv_file)
     for index, row in df.iterrows():
         if not os.path.isfile(os.path.join(image_file, row['image_id'])):
+            # print(os.path.isfile(os.path.join(image_file, str(row['image_id']))))
             print(f"Invalid or missing file: {row['image_id']} at index {index}")
 
+def main2():
+    model_path = 'Retrain_model/densenet121_input_model'
+    trans_to_tlite(model_path)
+
+
 if __name__ == '__main__':
-    main1()
+    main2()
